@@ -18,12 +18,15 @@ go build -o mini-paas .
 ./mini-paas
 ```
 
-Dashboard sur `http://127.0.0.1:8090`. Ajoute un projet (nom, URL du repo, branche optionnelle, port
-hôte, port conteneur — 80 par défaut), clique **Déployer**. La requête reste ouverte le temps du
-clone+build+run et affiche la sortie complète en dessous.
+Dashboard sur `http://127.0.0.1:8090`. Ajoute un projet (nom, URL du repo, branche optionnelle,
+variables d'env optionnelles, port hôte, port conteneur — 80 par défaut), clique **Déployer**. La
+requête reste ouverte le temps du clone+build+run et affiche la sortie complète en dessous.
 
 Branche laissée vide → reste sur la branche par défaut du remote. Une fois fixée à la création d'un
 projet, la changer implique de supprimer/recréer le projet (pas d'édition pour le MVP).
+
+Variables d'environnement : une par ligne au format `KEY=VALUE` dans le champ dédié, injectées au
+conteneur via `docker run -e`. Lignes vides et lignes commençant par `#` ignorées.
 
 Les projets sont stockés dans `data/projects.json`, les clones dans `data/repos/<id>/` — tout est
 dans le dossier courant, rien n'est écrit ailleurs sur la machine.
@@ -33,6 +36,5 @@ dans le dossier courant, rien n'est écrit ailleurs sur la machine.
 - Déploiement synchrone : la requête HTTP bloque jusqu'à la fin du build. Pour des builds longs,
   passer à un job en arrière-plan + Server-Sent Events pour streamer les logs en direct.
 - Aucune authentification — pensé pour tourner en local sur ta machine, pas exposé sur Internet.
-- Pas de gestion de variables d'environnement à injecter dans le conteneur déployé.
 
 À ajouter si tu veux vraiment t'en servir au quotidien pour plusieurs projets ; pas avant.

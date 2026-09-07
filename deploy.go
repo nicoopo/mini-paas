@@ -91,7 +91,13 @@ func dockerRun(p Project) (string, error) {
 	}
 	portMap := fmt.Sprintf("%s:%s", p.HostPort, containerPort)
 
-	runOut, err := runCmd(".", "docker", "run", "-d", "--name", name, "-p", portMap, name)
+	args := []string{"run", "-d", "--name", name, "-p", portMap}
+	for _, kv := range p.EnvVars {
+		args = append(args, "-e", kv)
+	}
+	args = append(args, name)
+
+	runOut, err := runCmd(".", "docker", args...)
 	out.WriteString(runOut)
 	return out.String(), err
 }
