@@ -12,6 +12,7 @@
   input { padding: 0.4rem; border: 1px solid #cbd5e1; border-radius: 4px; }
   input[name=name] { flex: 2; } input[name=repoUrl] { flex: 3; }
   input[name=hostPort], input[name=containerPort] { width: 5rem; }
+  textarea[name=envVars] { flex: 1 100%; padding: 0.4rem; border: 1px solid #cbd5e1; border-radius: 4px; font-family: inherit; resize: vertical; }
   button { padding: 0.4rem 0.8rem; border: 1px solid #1e293b; background: #1e293b; color: white; border-radius: 4px; cursor: pointer; }
   button.secondary { background: white; color: #1e293b; }
   .status-running { color: #15803d; font-weight: 600; }
@@ -30,6 +31,7 @@
     <input name="branch" placeholder="Branche (défaut: celle du remote)">
     <input name="hostPort" placeholder="Port hôte" required>
     <input name="containerPort" placeholder="Port conteneur (80)">
+    <textarea name="envVars" rows="2" placeholder="Variables d'env, une par ligne : KEY=VALUE"></textarea>
     <button type="submit">Ajouter</button>
   </form>
 
@@ -57,7 +59,7 @@ async function loadProjects() {
     const tr = document.createElement('tr');
     const statusClass = 'status-' + p.status.replace(/\s+/g, '-');
     tr.innerHTML = `
-      <td>${p.name}<br><small style="color:#64748b">${p.repoUrl}${p.branch ? ' @ ' + p.branch : ''}</small></td>
+      <td>${p.name}<br><small style="color:#64748b">${p.repoUrl}${p.branch ? ' @ ' + p.branch : ''}${p.envVars && p.envVars.length ? ' · ' + p.envVars.length + ' var(s) env' : ''}</small></td>
       <td>${p.hostPort} → ${p.containerPort || 80}</td>
       <td class="${statusClass}">${p.status}</td>
       <td>${p.lastDeployAt ? new Date(p.lastDeployAt).toLocaleString('fr-FR') : '—'}</td>

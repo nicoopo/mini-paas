@@ -14,6 +14,7 @@ type Project struct {
 	Name          string     `json:"name"`
 	RepoURL       string     `json:"repoUrl"`
 	Branch        string     `json:"branch,omitempty"` // vide = branche par défaut du remote
+	EnvVars       []string   `json:"envVars,omitempty"` // chaque entrée au format "KEY=VALUE"
 	HostPort      string     `json:"hostPort"`
 	ContainerPort string     `json:"containerPort"`
 	LastDeployAt  *time.Time `json:"lastDeployAt,omitempty"`

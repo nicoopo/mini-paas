@@ -5,6 +5,7 @@ import (
 	"embed"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -66,6 +67,7 @@ func handleCreateProject(w http.ResponseWriter, r *http.Request) {
 		Name          string `json:"name"`
 		RepoURL       string `json:"repoUrl"`
 		Branch        string `json:"branch"`
+		EnvVars       string `json:"envVars"` // brut, une variable KEY=VALUE par ligne
 		HostPort      string `json:"hostPort"`
 		ContainerPort string `json:"containerPort"`
 	}
@@ -81,12 +83,18 @@ func handleCreateProject(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "name, repoUrl et hostPort sont requis", http.StatusBadRequest)
 		return
 	}
+	envVars, err := parseEnvVars(in.EnvVars)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 
 	p := Project{
 		ID:            randomID(),
 		Name:          in.Name,
 		RepoURL:       in.RepoURL,
 		Branch:        in.Branch,
+		EnvVars:       envVars,
 		HostPort:      in.HostPort,
 		ContainerPort: in.ContainerPort,
 	}
@@ -166,6 +174,24 @@ func handleLogs(w http.ResponseWriter, r *http.Request) {
 func writeJSON(w http.ResponseWriter, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(v)
+}
+
+// parseEnvVars découpe un bloc "KEY=VALUE" ligne par ligne (lignes vides et # ignorées),
+// et rejette toute ligne qui ne respecte pas ce format.
+func parseEnvVars(raw string) ([]string, error) {
+	var out []string
+	for _, line := range strings.Split(raw, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		key, _, ok := strings.Cut(line, "=")
+		if !ok || strings.TrimSpace(key) == "" {
+			return nil, fmt.Errorf("variable d'environnement invalide (attendu KEY=VALUE): %q", line)
+		}
+		out = append(out, line)
+	}
+	return out, nil
 }
 
 func randomID() string {
