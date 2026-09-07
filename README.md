@@ -18,6 +18,16 @@ go build -o mini-paas .
 ./mini-paas
 ```
 
+Le dashboard est protégé par HTTP Basic Auth (un seul mot de passe partagé, login ignoré). Fixe-le
+via `PAAS_PASSWORD` :
+
+```bash
+PAAS_PASSWORD=change-moi ./mini-paas
+```
+
+Si `PAAS_PASSWORD` n'est pas défini, un mot de passe est généré au démarrage et affiché dans les
+logs — pratique pour tester, mais il change à chaque redémarrage.
+
 Dashboard sur `http://127.0.0.1:8090`. Ajoute un projet (nom, URL du repo, branche optionnelle,
 variables d'env optionnelles, port hôte, port conteneur — 80 par défaut), clique **Déployer**. La
 requête reste ouverte le temps du clone+build+run et affiche la sortie complète en dessous.
@@ -35,6 +45,7 @@ dans le dossier courant, rien n'est écrit ailleurs sur la machine.
 
 - Déploiement synchrone : la requête HTTP bloque jusqu'à la fin du build. Pour des builds longs,
   passer à un job en arrière-plan + Server-Sent Events pour streamer les logs en direct.
-- Aucune authentification — pensé pour tourner en local sur ta machine, pas exposé sur Internet.
+- Auth minimale (un seul mot de passe partagé, pas de compte multi-utilisateur) — suffisant pour un
+  outil perso, pas pour une exposition publique sérieuse.
 
 À ajouter si tu veux vraiment t'en servir au quotidien pour plusieurs projets ; pas avant.
