@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>mini-PaaS</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 900px; margin: 2rem auto; padding: 0 1rem; color: #1e293b; }
+  h1 { font-size: 1.4rem; }
+  table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+  th, td { text-align: left; padding: 0.5rem; border-bottom: 1px solid #e2e8f0; font-size: 0.9rem; }
+  form { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 1rem; }
+  input { padding: 0.4rem; border: 1px solid #cbd5e1; border-radius: 4px; }
+  input[name=name] { flex: 2; } input[name=repoUrl] { flex: 3; }
+  input[name=hostPort], input[name=containerPort] { width: 5rem; }
+  button { padding: 0.4rem 0.8rem; border: 1px solid #1e293b; background: #1e293b; color: white; border-radius: 4px; cursor: pointer; }
+  button.secondary { background: white; color: #1e293b; }
+  .status-running { color: #15803d; font-weight: 600; }
+  .status-exited, .status-non-déployé { color: #64748b; }
+  pre { background: #0f172a; color: #e2e8f0; padding: 1rem; border-radius: 6px; max-height: 300px; overflow: auto; white-space: pre-wrap; }
+  .row-actions button { margin-right: 0.25rem; font-size: 0.8rem; padding: 0.25rem 0.5rem; }
+</style>
+</head>
+<body>
+  <h1>mini-PaaS</h1>
+  <p>Déploie un projet depuis son dépôt Git (Dockerfile requis à la racine) dans un conteneur Docker local.</p>
+
+  <form id="add-form">
+    <input name="name" placeholder="Nom" required>
+    <input name="repoUrl" placeholder="URL du repo Git" required>
+    <input name="hostPort" placeholder="Port hôte" required>
+    <input name="containerPort" placeholder="Port conteneur (80)">
+    <button type="submit">Ajouter</button>
+  </form>
+
+  <table>
+    <thead><tr><th>Nom</th><th>Port</th><th>Statut</th><th>Dernier déploiement</th><th>Actions</th></tr></thead>
+    <tbody id="projects"></tbody>
+  </table>
+
+  <pre id="output" hidden></pre>
+
+<script>
+const projectsEl = document.getElementById('projects');
+const outputEl = document.getElementById('output');
+
+function showOutput(text) {
+  outputEl.hidden = false;
+  outputEl.textContent = text;
+}
+
+async function loadProjects() {
+  const res = await fetch('/api/projects');
+  const projects = await res.json();
+  projectsEl.innerHTML = '';
+  for (const p of projects) {
+    const tr = document.createElement('tr');
+    const statusClass = 'status-' + p.status.replace(/\s+/g, '-');
+    tr.innerHTML = `
+      <td>${p.name}<br><small style="color:#64748b">${p.repoUrl}</small></td>
+      <td>${p.hostPort} → ${p.containerPort || 80}</td>
+      <td class="${statusClass}">${p.status}</td>
+      <td>${p.lastDeployAt ? new Date(p.lastDeployAt).toLocaleString('fr-FR') : '—'}</td>
+      <td class="row-actions">
+        <button data-action="deploy" data-id="${p.id}">Déployer</button>
+        <button data-action="stop" data-id="${p.id}" class="secondary">Stop</button>
+        <button data-action="logs" data-id="${p.id}" class="secondary">Logs</button>
+        <button data-action="delete" data-id="${p.id}" class="secondary">Suppr.</button>
+      </td>`;
+    projectsEl.appendChild(tr);
+  }
+}
+
+document.getElementById('add-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const form = new FormData(e.target);
+  const body = Object.fromEntries(form.entries());
+  const res = await fetch('/api/projects', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  if (!res.ok) { showOutput(await res.text()); return; }
+  e.target.reset();
+  loadProjects();
+});
+
+projectsEl.addEventListener('click', async (e) => {
+  const btn = e.target.closest('button');
+  if (!btn) return;
+  const { action, id } = btn.dataset;
+
+  if (action === 'delete') {
+    if (!confirm('Supprimer ce projet (conteneur + repo local) ?')) return;
+    await fetch(`/api/projects/${id}`, { method: 'DELETE' });
+    return loadProjects();
+  }
+
+  if (action === 'logs') {
+    const res = await fetch(`/api/projects/${id}/logs`);
+    const data = await res.json();
+    return showOutput(data.output || '(aucun log)');
+  }
+
+  btn.disabled = true;
+  showOutput(action === 'deploy' ? 'Déploiement en cours…' : 'Arrêt en cours…');
+  const res = await fetch(`/api/projects/${id}/${action}`, { method: 'POST' });
+  const data = await res.json();
+  showOutput(`${data.output || ''}\n\n${data.status}`);
+  btn.disabled = false;
+  loadProjects();
+});
+
+loadProjects();
+</script>
+</body>
+</html>
