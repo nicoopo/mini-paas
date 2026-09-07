@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -18,6 +19,7 @@ import (
 var webFS embed.FS
 
 var store *Store
+var jobs = NewJobManager()
 
 type projectView struct {
 	Project
@@ -36,6 +38,7 @@ func main() {
 	mux.HandleFunc("POST /api/projects", handleCreateProject)
 	mux.HandleFunc("DELETE /api/projects/{id}", handleDeleteProject)
 	mux.HandleFunc("POST /api/projects/{id}/deploy", handleDeploy)
+	mux.HandleFunc("GET /api/projects/{id}/deploy/stream", handleDeployStream)
 	mux.HandleFunc("POST /api/projects/{id}/stop", handleStop)
 	mux.HandleFunc("GET /api/projects/{id}/logs", handleLogs)
 
@@ -79,7 +82,13 @@ func handleListProjects(w http.ResponseWriter, r *http.Request) {
 	}
 	views := make([]projectView, 0, len(projects))
 	for _, p := range projects {
-		views = append(views, projectView{Project: p, Status: Status(p)})
+		status := Status(p)
+		if job, ok := jobs.Get(p.ID); ok {
+			if jobStatus, _ := job.Snapshot(); jobStatus == "running" {
+				status = "déploiement en cours"
+			}
+		}
+		views = append(views, projectView{Project: p, Status: status})
 	}
 	writeJSON(w, views)
 }
@@ -143,8 +152,8 @@ func handleDeleteProject(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// handleDeploy est synchrone : la requête reste ouverte le temps du clone+build+run.
-// ponytail: pour un projet perso ça reste supportable ; passer à un job async + SSE si les builds deviennent longs.
+// handleDeploy lance le déploiement en arrière-plan et répond immédiatement.
+// Le suivi en direct se fait via GET .../deploy/stream (SSE).
 func handleDeploy(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	p, err := store.Get(id)
@@ -153,18 +162,78 @@ func handleDeploy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	output, deployErr := Deploy(p)
-	if deployErr == nil {
-		now := time.Now()
-		p.LastDeployAt = &now
-		_ = store.Update(p)
+	_, err = jobs.Start(id, func(w io.Writer) error {
+		deployErr := Deploy(p, w)
+		if deployErr == nil {
+			now := time.Now()
+			p.LastDeployAt = &now
+			_ = store.Update(p)
+		}
+		return deployErr
+	})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusConflict)
+		return
+	}
+	writeJSON(w, map[string]string{"status": "started"})
+}
+
+// handleDeployStream diffuse en SSE la sortie du dernier déploiement du projet : d'abord le
+// buffer déjà accumulé (utile pour un client qui rejoint après coup), puis la suite en direct,
+// puis un évènement "status" final une fois le job terminé.
+func handleDeployStream(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	job, ok := jobs.Get(id)
+	if !ok {
+		http.Error(w, "aucun déploiement pour ce projet", http.StatusNotFound)
+		return
+	}
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "streaming non supporté", http.StatusInternalServerError)
+		return
 	}
 
-	status := "ok"
-	if deployErr != nil {
-		status = deployErr.Error()
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+
+	ch, backlog, status, unsubscribe := job.Subscribe()
+	defer unsubscribe()
+
+	writeChunk := func(b []byte) {
+		payload, _ := json.Marshal(map[string]string{"chunk": string(b)})
+		fmt.Fprintf(w, "data: %s\n\n", payload)
+		flusher.Flush()
 	}
-	writeJSON(w, map[string]string{"output": output, "status": status})
+	writeStatus := func(status, errMsg string) {
+		payload, _ := json.Marshal(map[string]string{"status": status, "error": errMsg})
+		fmt.Fprintf(w, "event: status\ndata: %s\n\n", payload)
+		flusher.Flush()
+	}
+
+	if len(backlog) > 0 {
+		writeChunk(backlog)
+	}
+	if status != "running" {
+		_, errMsg := job.Snapshot()
+		writeStatus(status, errMsg)
+		return
+	}
+
+	for {
+		select {
+		case chunk, ok := <-ch:
+			if !ok {
+				finalStatus, errMsg := job.Snapshot()
+				writeStatus(finalStatus, errMsg)
+				return
+			}
+			writeChunk(chunk)
+		case <-r.Context().Done():
+			return
+		}
+	}
 }
 
 func handleStop(w http.ResponseWriter, r *http.Request) {

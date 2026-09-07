@@ -29,8 +29,10 @@ Si `PAAS_PASSWORD` n'est pas défini, un mot de passe est généré au démarrag
 logs — pratique pour tester, mais il change à chaque redémarrage.
 
 Dashboard sur `http://127.0.0.1:8090`. Ajoute un projet (nom, URL du repo, branche optionnelle,
-variables d'env optionnelles, port hôte, port conteneur — 80 par défaut), clique **Déployer**. La
-requête reste ouverte le temps du clone+build+run et affiche la sortie complète en dessous.
+variables d'env optionnelles, port hôte, port conteneur — 80 par défaut), clique **Déployer**. Le
+déploiement tourne en arrière-plan ; la sortie de `git`/`docker` s'affiche en direct via
+Server-Sent Events au fur et à mesure, sans bloquer la requête. Un seul déploiement à la fois par
+projet (le bouton renvoie une erreur 409 si tu redéploies pendant qu'un déploiement est déjà en cours).
 
 Branche laissée vide → reste sur la branche par défaut du remote. Une fois fixée à la création d'un
 projet, la changer implique de supprimer/recréer le projet (pas d'édition pour le MVP).
@@ -43,8 +45,8 @@ dans le dossier courant, rien n'est écrit ailleurs sur la machine.
 
 ## Limites volontaires du MVP (commentaires `ponytail:` dans le code)
 
-- Déploiement synchrone : la requête HTTP bloque jusqu'à la fin du build. Pour des builds longs,
-  passer à un job en arrière-plan + Server-Sent Events pour streamer les logs en direct.
+- Jobs de déploiement en mémoire, perdus au redémarrage du process — acceptable, un déploiement en
+  cours ne survivrait de toute façon pas à un arrêt du binaire.
 - Auth minimale (un seul mot de passe partagé, pas de compte multi-utilisateur) — suffisant pour un
   outil perso, pas pour une exposition publique sérieuse.
 
