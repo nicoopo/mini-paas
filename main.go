@@ -2,6 +2,7 @@ package main
 
 import (
 	"crypto/rand"
+	"crypto/subtle"
 	"embed"
 	"encoding/hex"
 	"encoding/json"
@@ -38,9 +39,30 @@ func main() {
 	mux.HandleFunc("POST /api/projects/{id}/stop", handleStop)
 	mux.HandleFunc("GET /api/projects/{id}/logs", handleLogs)
 
+	password := os.Getenv("PAAS_PASSWORD")
+	if password == "" {
+		password = randomPassword()
+		log.Printf("PAAS_PASSWORD non défini : mot de passe généré pour cette session -> %s", password)
+		log.Printf("(fixe PAAS_PASSWORD pour garder le même mot de passe entre les redémarrages)")
+	}
+
 	addr := "127.0.0.1:8090"
 	log.Printf("mini-PaaS sur http://%s (Ctrl+C pour arrêter)", addr)
-	log.Fatal(http.ListenAndServe(addr, mux))
+	log.Fatal(http.ListenAndServe(addr, requireAuth(password, mux)))
+}
+
+// requireAuth protège tout le dashboard par HTTP Basic Auth avec un mot de passe partagé.
+// L'utilisateur (login) n'est pas vérifié : un seul secret pour un outil mono-utilisateur.
+func requireAuth(password string, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, pass, ok := r.BasicAuth()
+		if !ok || subtle.ConstantTimeCompare([]byte(pass), []byte(password)) != 1 {
+			w.Header().Set("WWW-Authenticate", `Basic realm="mini-paas"`)
+			http.Error(w, "Authentification requise", http.StatusUnauthorized)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 func handleIndex(w http.ResponseWriter, r *http.Request) {
@@ -196,6 +218,12 @@ func parseEnvVars(raw string) ([]string, error) {
 
 func randomID() string {
 	b := make([]byte, 4)
+	_, _ = rand.Read(b)
+	return hex.EncodeToString(b)
+}
+
+func randomPassword() string {
+	b := make([]byte, 16)
 	_, _ = rand.Read(b)
 	return hex.EncodeToString(b)
 }
