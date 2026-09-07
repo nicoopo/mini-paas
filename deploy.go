@@ -25,17 +25,48 @@ func repoDir(p Project) string {
 	return filepath.Join("data", "repos", p.ID)
 }
 
-// cloneOrPull clone le repo s'il n'existe pas encore, sinon fait un pull.
-// ponytail: toujours sur la branche par défaut du remote, pas de choix de branche pour le MVP.
+// cloneOrPull clone le repo s'il n'existe pas encore, sinon fetch+pull.
+// Si p.Branch est vide, on reste sur la branche par défaut du remote.
 func cloneOrPull(p Project) (string, error) {
 	dir := repoDir(p)
 	if _, err := os.Stat(filepath.Join(dir, ".git")); err == nil {
-		return runCmd(dir, "git", "pull")
+		return pullBranch(dir, p.Branch)
 	}
 	if err := os.MkdirAll(filepath.Dir(dir), 0o755); err != nil {
 		return "", err
 	}
-	return runCmd(".", "git", "clone", p.RepoURL, dir)
+	args := []string{"clone"}
+	if p.Branch != "" {
+		args = append(args, "-b", p.Branch)
+	}
+	args = append(args, p.RepoURL, dir)
+	return runCmd(".", "git", args...)
+}
+
+// pullBranch met à jour un clone existant : fetch, puis bascule sur la branche demandée
+// si elle diffère de celle déjà checkoutée, puis pull.
+// "git checkout -B <branch> origin/<branch>" (re)crée la branche locale pile sur le remote :
+// pas de gestion de divergence/merge, cohérent avec l'esprit outil de déploiement (pas de dev ici).
+func pullBranch(dir, branch string) (string, error) {
+	var out bytes.Buffer
+
+	fetchOut, err := runCmd(dir, "git", "fetch", "origin")
+	out.WriteString(fetchOut)
+	if err != nil {
+		return out.String(), err
+	}
+
+	if branch != "" {
+		checkoutOut, err := runCmd(dir, "git", "checkout", "-B", branch, "origin/"+branch)
+		out.WriteString(checkoutOut)
+		if err != nil {
+			return out.String(), err
+		}
+	}
+
+	pullOut, err := runCmd(dir, "git", "pull")
+	out.WriteString(pullOut)
+	return out.String(), err
 }
 
 // dockerBuild suppose un Dockerfile à la racine du repo, comme n'importe quel PaaS basé sur Docker.

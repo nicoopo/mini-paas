@@ -65,6 +65,7 @@ func handleCreateProject(w http.ResponseWriter, r *http.Request) {
 	var in struct {
 		Name          string `json:"name"`
 		RepoURL       string `json:"repoUrl"`
+		Branch        string `json:"branch"`
 		HostPort      string `json:"hostPort"`
 		ContainerPort string `json:"containerPort"`
 	}
@@ -74,6 +75,7 @@ func handleCreateProject(w http.ResponseWriter, r *http.Request) {
 	}
 	in.Name = strings.TrimSpace(in.Name)
 	in.RepoURL = strings.TrimSpace(in.RepoURL)
+	in.Branch = strings.TrimSpace(in.Branch)
 	in.HostPort = strings.TrimSpace(in.HostPort)
 	if in.Name == "" || in.RepoURL == "" || in.HostPort == "" {
 		http.Error(w, "name, repoUrl et hostPort sont requis", http.StatusBadRequest)
@@ -84,6 +86,7 @@ func handleCreateProject(w http.ResponseWriter, r *http.Request) {
 		ID:            randomID(),
 		Name:          in.Name,
 		RepoURL:       in.RepoURL,
+		Branch:        in.Branch,
 		HostPort:      in.HostPort,
 		ContainerPort: in.ContainerPort,
 	}

@@ -13,6 +13,7 @@ type Project struct {
 	ID            string     `json:"id"`
 	Name          string     `json:"name"`
 	RepoURL       string     `json:"repoUrl"`
+	Branch        string     `json:"branch,omitempty"` // vide = branche par défaut du remote
 	HostPort      string     `json:"hostPort"`
 	ContainerPort string     `json:"containerPort"`
 	LastDeployAt  *time.Time `json:"lastDeployAt,omitempty"`

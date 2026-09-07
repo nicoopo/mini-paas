@@ -27,6 +27,7 @@
   <form id="add-form">
     <input name="name" placeholder="Nom" required>
     <input name="repoUrl" placeholder="URL du repo Git" required>
+    <input name="branch" placeholder="Branche (défaut: celle du remote)">
     <input name="hostPort" placeholder="Port hôte" required>
     <input name="containerPort" placeholder="Port conteneur (80)">
     <button type="submit">Ajouter</button>
@@ -56,7 +57,7 @@ async function loadProjects() {
     const tr = document.createElement('tr');
     const statusClass = 'status-' + p.status.replace(/\s+/g, '-');
     tr.innerHTML = `
-      <td>${p.name}<br><small style="color:#64748b">${p.repoUrl}</small></td>
+      <td>${p.name}<br><small style="color:#64748b">${p.repoUrl}${p.branch ? ' @ ' + p.branch : ''}</small></td>
       <td>${p.hostPort} → ${p.containerPort || 80}</td>
       <td class="${statusClass}">${p.status}</td>
       <td>${p.lastDeployAt ? new Date(p.lastDeployAt).toLocaleString('fr-FR') : '—'}</td>
